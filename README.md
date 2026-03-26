@@ -2,7 +2,7 @@
 
 An interactive mechanistic interpretability tool for GPT-2. Type a prompt, watch the next-token probability distribution, then click any of the 144 attention heads to zero out its contribution and observe how the output shifts in real time.
 
-Built under Eunice Labs.
+<img width="1917" height="973" alt="Image" src="https://github.com/user-attachments/assets/ee2b5193-5c8c-4b0f-956b-c37a02718e0b" />
 
 ---
 
