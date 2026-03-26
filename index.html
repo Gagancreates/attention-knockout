@@ -213,9 +213,13 @@
       padding: 10px 14px;
       flex: 1;
       overflow-y: auto;
+      min-height: 0;
     }
-    #prob-chart-wrap { position: relative; }
-    #prob-chart { width: 100% !important; }
+    #prob-chart-wrap {
+      position: relative;
+      height: 520px;
+    }
+    #prob-chart { width: 100% !important; height: 100% !important; }
     #loading-overlay {
       position: absolute;
       inset: 0;
@@ -340,12 +344,12 @@ let debounceTimer = null;
 // Colour helpers
 // ────────────────────────────────────────────────────────────────────────────
 function importanceColor(v) {
-  // cool (blue-gray) → warm (amber/red)
+  // cool (slate) → warm (amber → red), all bright enough to read on dark bg
   const stops = [
-    [0.00, [30, 35, 60]],
-    [0.33, [60, 80, 140]],
-    [0.66, [200, 120, 40]],
-    [1.00, [220, 50, 50]],
+    [0.00, [50,  60, 120]],
+    [0.33, [70, 100, 200]],
+    [0.66, [220, 140,  30]],
+    [1.00, [230,  50,  50]],
   ];
   let lo = stops[0], hi = stops[stops.length - 1];
   for (let i = 0; i < stops.length - 1; i++) {
@@ -519,6 +523,7 @@ function renderChart(base, current) {
     options: {
       indexAxis: 'y',
       responsive: true,
+      maintainAspectRatio: false,
       animation: { duration: 200 },
       plugins: {
         legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
