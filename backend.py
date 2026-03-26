@@ -41,19 +41,21 @@ def get_probs(prompt: str, knocked_out_heads: list[tuple[int, int]], top_k: int 
     inputs = tokenizer(prompt, return_tensors="pt")
     hooks = []
 
-    def make_hook(head_idx: int):
-        def hook(module, input, output):
-            # output[0]: (batch, seq_len, n_embd) — concatenated multi-head output
-            # before W_O projection
-            out = output[0].clone()
+    def make_pre_hook(head_idx: int):
+        def hook(module, input):
+            # input[0]: (batch, seq_len, n_embd) — concatenated head outputs
+            # arriving at W_O (c_proj) before they get mixed. Zeroing head h's
+            # 64-dim slice here cleanly removes that head's contribution.
+            inp = list(input)
+            inp[0] = inp[0].clone()
             start = head_idx * HEAD_DIM
-            out[:, :, start:start + HEAD_DIM] = 0.0
-            return (out,) + output[1:]
+            inp[0][:, :, start:start + HEAD_DIM] = 0.0
+            return tuple(inp)
         return hook
 
     for layer_idx, head_idx in knocked_out_heads:
-        attn_module = model.transformer.h[layer_idx].attn
-        h = attn_module.register_forward_hook(make_hook(head_idx))
+        c_proj = model.transformer.h[layer_idx].attn.c_proj
+        h = c_proj.register_forward_pre_hook(make_pre_hook(head_idx))
         hooks.append(h)
 
     with torch.no_grad():
@@ -80,10 +82,10 @@ def get_attention_pattern(prompt: str, layer_idx: int, head_idx: int):
     captured = {}
 
     def hook(module, input, output):
-        # output[1] is attention weights when output_attentions=True
-        # shape: (batch, n_heads, seq_len, seq_len)
-        if len(output) > 1 and output[1] is not None:
-            captured["weights"] = output[1].detach()
+        # GPT2Attention returns (attn_output, present_kv, attn_weights)
+        # when output_attentions=True — weights are at index 2
+        if len(output) > 2 and output[2] is not None:
+            captured["weights"] = output[2].detach()
 
     handle = model.transformer.h[layer_idx].attn.register_forward_hook(hook)
 
