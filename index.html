@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attention Knockout</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2a2d3a;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent: #6366f1;
+      --red: #ef4444;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    #reset-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: border-color .15s, color .15s;
+    }
+    #reset-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── Prompt bar ── */
+    #prompt-bar {
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+    #prompt-bar label { color: var(--muted); white-space: nowrap; }
+    #prompt-input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    #prompt-input:focus { border-color: var(--accent); }
+    #status-line { color: var(--muted); white-space: nowrap; font-size: 12px; }
+
+    /* ── Main panels ── */
+    #main {
+      display: grid;
+      grid-template-columns: 260px 1fr 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .panel {
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .panel:last-child { border-right: none; }
+
+    .panel-header {
+      padding: 8px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    /* ── Head Grid ── */
+    #head-grid-wrap {
+      padding: 10px 12px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    #layer-labels {
+      display: grid;
+      grid-template-rows: repeat(12, 18px);
+      gap: 3px;
+      position: absolute;
+    }
+    .layer-label {
+      font-size: 10px;
+      color: var(--muted);
+      line-height: 18px;
+    }
+    #grid-container {
+      display: flex;
+      gap: 6px;
+    }
+    #grid-layer-labels {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      padding-top: 2px;
+    }
+    .grid-layer-label {
+      font-size: 10px;
+      color: var(--muted);
+      height: 18px;
+      line-height: 18px;
+      width: 20px;
+      text-align: right;
+    }
+    #head-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 18px);
+      grid-template-rows: repeat(12, 18px);
+      gap: 3px;
+    }
+    .head-cell {
+      width: 18px;
+      height: 18px;
+      border-radius: 3px;
+      cursor: pointer;
+      position: relative;
+      transition: transform .1s, box-shadow .1s;
+      border: 1px solid transparent;
+    }
+    .head-cell:hover {
+      transform: scale(1.3);
+      z-index: 10;
+      box-shadow: 0 0 0 1px var(--accent);
+    }
+    .head-cell.knocked-out {
+      box-shadow: 0 0 0 2px var(--red);
+    }
+    .head-cell.knocked-out::after {
+      content: '×';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--red);
+      line-height: 1;
+    }
+    #grid-head-labels {
+      display: flex;
+      gap: 3px;
+      margin-left: 26px;
+      margin-bottom: 3px;
+    }
+    .grid-head-label {
+      font-size: 9px;
+      color: var(--muted);
+      width: 18px;
+      text-align: center;
+    }
+
+    /* ── Tooltip ── */
+    #tooltip {
+      position: fixed;
+      background: #1e2130;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 11px;
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+      max-width: 220px;
+      line-height: 1.5;
+    }
+
+    /* ── Prob chart ── */
+    #prob-panel {
+      padding: 10px 14px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    #prob-chart-wrap { position: relative; }
+    #prob-chart { width: 100% !important; }
+    #loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15,17,23,.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: var(--muted);
+      border-radius: 6px;
+      display: none;
+    }
+
+    /* ── Attention heatmap ── */
+    #attn-panel {
+      padding: 10px 14px;
+      flex: 1;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    #attn-hint {
+      color: var(--muted);
+      font-size: 12px;
+      margin: auto;
+      text-align: center;
+    }
+    #attn-wrap { display: none; flex-direction: column; gap: 2px; }
+    #attn-head-label {
+      font-size: 11px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+    #attn-canvas-wrap { position: relative; overflow: auto; }
+    canvas#attn-canvas { display: block; cursor: crosshair; }
+    #attn-tooltip {
+      position: fixed;
+      background: #1e2130;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 4px 8px;
+      font-size: 11px;
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Attention Knockout</h1>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span id="status-line">loading importance matrix…</span>
+    <button id="reset-btn">Reset All Heads</button>
+  </div>
+</header>
+
+<div id="prompt-bar">
+  <label>Prompt</label>
+  <input id="prompt-input" type="text" value="The cat sat on the" spellcheck="false" />
+</div>
+
+<div id="main">
+
+  <!-- ── Panel 1: Head Grid ── -->
+  <div class="panel">
+    <div class="panel-header">Attention Heads — 12 layers × 12 heads</div>
+    <div id="head-grid-wrap">
+      <div id="grid-head-labels"></div>
+      <div id="grid-container">
+        <div id="grid-layer-labels"></div>
+        <div id="head-grid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Panel 2: Probability Diff ── -->
+  <div class="panel">
+    <div class="panel-header">Next-Token Probabilities — base vs. current</div>
+    <div id="prob-panel">
+      <div id="prob-chart-wrap">
+        <canvas id="prob-chart"></canvas>
+        <div id="loading-overlay">computing…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Panel 3: Attention Pattern ── -->
+  <div class="panel">
+    <div class="panel-header">Attention Pattern — right-click a head to inspect</div>
+    <div id="attn-panel">
+      <div id="attn-hint">Right-click any head cell to visualize its attention pattern here.</div>
+      <div id="attn-wrap">
+        <div id="attn-head-label"></div>
+        <div id="attn-canvas-wrap">
+          <canvas id="attn-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="tooltip"></div>
+<div id="attn-tooltip"></div>
+
+<script>
+// ────────────────────────────────────────────────────────────────────────────
+// State
+// ────────────────────────────────────────────────────────────────────────────
+const API = 'http://localhost:8000';
+let prompt = document.getElementById('prompt-input').value;
+let knockedOut = new Set();   // "layer,head" strings
+let baseProbs = [];
+let importanceMatrix = [];    // [12][12] floats 0-1
+let probChart = null;
+let debounceTimer = null;
+
+// ────────────────────────────────────────────────────────────────────────────
+// Colour helpers
+// ────────────────────────────────────────────────────────────────────────────
+function importanceColor(v) {
+  // cool (blue-gray) → warm (amber/red)
+  const stops = [
+    [0.00, [30, 35, 60]],
+    [0.33, [60, 80, 140]],
+    [0.66, [200, 120, 40]],
+    [1.00, [220, 50, 50]],
+  ];
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (v >= stops[i][0] && v <= stops[i + 1][0]) { lo = stops[i]; hi = stops[i + 1]; break; }
+  }
+  const t = (v - lo[0]) / (hi[0] - lo[0] + 1e-9);
+  const r = lo[1].map((c, i) => Math.round(c + t * (hi[1][i] - c)));
+  return `rgb(${r[0]},${r[1]},${r[2]})`;
+}
+
+function heatColor(v) {
+  // white → deep blue for attention weights
+  const r = Math.round(255 * (1 - v * 0.85));
+  const g = Math.round(255 * (1 - v * 0.85));
+  const b = 255;
+  return `rgb(${r},${g},${b})`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Head Grid
+// ────────────────────────────────────────────────────────────────────────────
+function buildGrid() {
+  const headLabels = document.getElementById('grid-head-labels');
+  const layerLabels = document.getElementById('grid-layer-labels');
+  const grid = document.getElementById('head-grid');
+  headLabels.innerHTML = '';
+  layerLabels.innerHTML = '';
+  grid.innerHTML = '';
+
+  for (let h = 0; h < 12; h++) {
+    const el = document.createElement('div');
+    el.className = 'grid-head-label';
+    el.textContent = h;
+    headLabels.appendChild(el);
+  }
+
+  for (let l = 0; l < 12; l++) {
+    const el = document.createElement('div');
+    el.className = 'grid-layer-label';
+    el.textContent = `L${l}`;
+    layerLabels.appendChild(el);
+  }
+
+  for (let l = 0; l < 12; l++) {
+    for (let h = 0; h < 12; h++) {
+      const cell = document.createElement('div');
+      cell.className = 'head-cell';
+      cell.id = `cell-${l}-${h}`;
+      const imp = importanceMatrix.length ? importanceMatrix[l][h] : 0.2;
+      cell.style.background = importanceColor(imp);
+      if (knockedOut.has(`${l},${h}`)) cell.classList.add('knocked-out');
+
+      cell.addEventListener('click', () => toggleHead(l, h));
+      cell.addEventListener('contextmenu', e => { e.preventDefault(); inspectHead(l, h); });
+
+      // Tooltip
+      cell.addEventListener('mouseenter', e => showTooltip(e, l, h, imp));
+      cell.addEventListener('mousemove', e => moveTooltip(e));
+      cell.addEventListener('mouseleave', hideTooltip);
+
+      grid.appendChild(cell);
+    }
+  }
+}
+
+function refreshGrid() {
+  for (let l = 0; l < 12; l++) {
+    for (let h = 0; h < 12; h++) {
+      const cell = document.getElementById(`cell-${l}-${h}`);
+      if (!cell) continue;
+      const ko = knockedOut.has(`${l},${h}`);
+      cell.classList.toggle('knocked-out', ko);
+    }
+  }
+  updateStatus();
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Tooltip
+// ────────────────────────────────────────────────────────────────────────────
+const tooltip = document.getElementById('tooltip');
+
+function showTooltip(e, l, h, imp) {
+  const ko = knockedOut.has(`${l},${h}`);
+  tooltip.innerHTML = `
+    <strong>Layer ${l}, Head ${h}</strong><br>
+    importance: <span style="color:${importanceColor(imp)}">${imp.toFixed(3)}</span><br>
+    <span style="color:var(--muted)">click = ${ko ? 'restore' : 'knockout'} · right-click = inspect</span>
+  `;
+  tooltip.style.display = 'block';
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  tooltip.style.left = (e.clientX + 14) + 'px';
+  tooltip.style.top  = (e.clientY - 10) + 'px';
+}
+function hideTooltip() { tooltip.style.display = 'none'; }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Status
+// ────────────────────────────────────────────────────────────────────────────
+function updateStatus() {
+  const n = knockedOut.size;
+  document.getElementById('status-line').textContent =
+    `144 heads · ${n} knocked out`;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// API calls
+// ────────────────────────────────────────────────────────────────────────────
+async function fetchProbs(koHeads) {
+  const res = await fetch(`${API}/probs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, knocked_out_heads: koHeads, top_k: 20 }),
+  });
+  return (await res.json()).result;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Prob chart
+// ────────────────────────────────────────────────────────────────────────────
+function renderChart(base, current) {
+  // Merge token sets — union of top-k from both
+  const tokenSet = new Map();
+  base.forEach(t => tokenSet.set(t.token, { base: t.prob, curr: 0 }));
+  current.forEach(t => {
+    if (tokenSet.has(t.token)) tokenSet.get(t.token).curr = t.prob;
+    else tokenSet.set(t.token, { base: 0, curr: t.prob });
+  });
+
+  // Sort by base prob desc
+  const sorted = [...tokenSet.entries()].sort((a, b) => b[1].base - a[1].base);
+
+  const labels  = sorted.map(([tok]) => JSON.stringify(tok));
+  const baseVals = sorted.map(([, v]) => v.base);
+  const currVals = sorted.map(([, v]) => v.curr);
+
+  const bgColors = currVals.map((cv, i) => {
+    const bv = baseVals[i];
+    const delta = cv - bv;
+    if (delta > 0.01)  return 'rgba(34,197,94,.75)';
+    if (delta < -0.01) return 'rgba(239,68,68,.75)';
+    return 'rgba(99,102,241,.6)';
+  });
+
+  const ctx = document.getElementById('prob-chart').getContext('2d');
+
+  if (probChart) probChart.destroy();
+  probChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Base',
+          data: baseVals,
+          backgroundColor: 'rgba(100,116,139,.35)',
+          borderColor: 'rgba(100,116,139,.6)',
+          borderWidth: 1,
+        },
+        {
+          label: 'Current',
+          data: currVals,
+          backgroundColor: bgColors,
+          borderColor: bgColors.map(c => c.replace(/[\d.]+\)$/, '1)')),
+          borderWidth: 1,
+        },
+      ],
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      animation: { duration: 200 },
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${(ctx.raw * 100).toFixed(2)}%`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          min: 0,
+          ticks: { color: '#64748b', callback: v => `${(v*100).toFixed(0)}%` },
+          grid: { color: '#1e2130' },
+        },
+        y: {
+          ticks: { color: '#cbd5e1', font: { family: 'monospace', size: 11 } },
+          grid: { color: '#1e2130' },
+        },
+      },
+    },
+  });
+}
+
+function setLoading(on) {
+  document.getElementById('loading-overlay').style.display = on ? 'flex' : 'none';
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Attention heatmap
+// ────────────────────────────────────────────────────────────────────────────
+let attnData = null;
+const attnCanvas = document.getElementById('attn-canvas');
+const attnCtx = attnCanvas.getContext('2d');
+const attnTip = document.getElementById('attn-tooltip');
+
+function renderAttnHeatmap(data, layer, head) {
+  attnData = data;
+  const { tokens, matrix } = data;
+  const n = tokens.length;
+  const CELL = Math.max(18, Math.min(36, Math.floor(360 / n)));
+  const LABEL_W = 60;
+  const LABEL_H = 60;
+
+  attnCanvas.width  = LABEL_W + n * CELL;
+  attnCanvas.height = LABEL_H + n * CELL;
+
+  attnCtx.fillStyle = '#0f1117';
+  attnCtx.fillRect(0, 0, attnCanvas.width, attnCanvas.height);
+
+  // Draw cells
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const v = matrix[r][c];
+      attnCtx.fillStyle = `rgba(99,102,241,${v.toFixed(3)})`;
+      attnCtx.fillRect(LABEL_W + c * CELL, LABEL_H + r * CELL, CELL - 1, CELL - 1);
+    }
+  }
+
+  // Column labels (top)
+  attnCtx.fillStyle = '#94a3b8';
+  attnCtx.font = `${Math.min(10, CELL - 2)}px monospace`;
+  attnCtx.textAlign = 'center';
+  for (let c = 0; c < n; c++) {
+    attnCtx.save();
+    attnCtx.translate(LABEL_W + c * CELL + CELL / 2, LABEL_H - 4);
+    attnCtx.rotate(-Math.PI / 4);
+    attnCtx.fillText(tokens[c], 0, 0);
+    attnCtx.restore();
+  }
+
+  // Row labels (left)
+  attnCtx.textAlign = 'right';
+  for (let r = 0; r < n; r++) {
+    attnCtx.fillText(tokens[r], LABEL_W - 4, LABEL_H + r * CELL + CELL / 2 + 3);
+  }
+
+  document.getElementById('attn-head-label').textContent = `Layer ${layer}, Head ${head}`;
+  document.getElementById('attn-hint').style.display = 'none';
+  document.getElementById('attn-wrap').style.display = 'flex';
+
+  // Mousemove tooltip
+  attnCanvas.onmousemove = e => {
+    const rect = attnCanvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const LABEL_W2 = 60, LABEL_H2 = 60;
+    const cellSize = CELL;
+    const col = Math.floor((mx - LABEL_W2) / cellSize);
+    const row = Math.floor((my - LABEL_H2) / cellSize);
+    if (row >= 0 && row < n && col >= 0 && col < n) {
+      const v = matrix[row][col];
+      attnTip.textContent = `${tokens[row].trim()} → ${tokens[col].trim()}: ${v.toFixed(4)}`;
+      attnTip.style.display = 'block';
+      attnTip.style.left = (e.clientX + 14) + 'px';
+      attnTip.style.top  = (e.clientY - 10) + 'px';
+    } else {
+      attnTip.style.display = 'none';
+    }
+  };
+  attnCanvas.onmouseleave = () => { attnTip.style.display = 'none'; };
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// User actions
+// ────────────────────────────────────────────────────────────────────────────
+async function toggleHead(layer, head) {
+  const key = `${layer},${head}`;
+  knockedOut.has(key) ? knockedOut.delete(key) : knockedOut.add(key);
+  refreshGrid();
+  setLoading(true);
+  try {
+    const koHeads = [...knockedOut].map(k => k.split(',').map(Number));
+    const current = await fetchProbs(koHeads);
+    renderChart(baseProbs, current);
+  } finally {
+    setLoading(false);
+  }
+}
+
+async function inspectHead(layer, head) {
+  // Highlight the cell briefly
+  const cell = document.getElementById(`cell-${layer}-${head}`);
+  if (cell) { cell.style.outline = `2px solid var(--accent)`; setTimeout(() => cell.style.outline = '', 600); }
+
+  const res = await fetch(`${API}/attention_pattern?prompt=${encodeURIComponent(prompt)}&layer=${layer}&head=${head}`);
+  const data = await res.json();
+  renderAttnHeatmap(data, layer, head);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Prompt change
+// ────────────────────────────────────────────────────────────────────────────
+document.getElementById('prompt-input').addEventListener('input', e => {
+  prompt = e.target.value;
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(onPromptChange, 300);
+});
+
+async function onPromptChange() {
+  knockedOut.clear();
+  document.getElementById('attn-hint').style.display = '';
+  document.getElementById('attn-wrap').style.display = 'none';
+  refreshGrid();
+  setLoading(true);
+  try {
+    baseProbs = await fetchProbs([]);
+    renderChart(baseProbs, baseProbs);
+  } finally {
+    setLoading(false);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Reset
+// ────────────────────────────────────────────────────────────────────────────
+document.getElementById('reset-btn').addEventListener('click', async () => {
+  knockedOut.clear();
+  refreshGrid();
+  setLoading(true);
+  try {
+    renderChart(baseProbs, baseProbs);
+  } finally {
+    setLoading(false);
+  }
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Init
+// ────────────────────────────────────────────────────────────────────────────
+async function init() {
+  // Build grid skeleton first (no importance colors yet)
+  buildGrid();
+
+  const [impRes, probRes] = await Promise.all([
+    fetch(`${API}/importance`).then(r => r.json()),
+    fetchProbs([]),
+  ]);
+
+  importanceMatrix = impRes.matrix;
+  baseProbs = probRes;
+
+  buildGrid();           // rebuild with real importance colors
+  renderChart(baseProbs, baseProbs);
+  updateStatus();
+}
+
+init().catch(err => {
+  document.getElementById('status-line').textContent = `⚠ backend not reachable — start uvicorn`;
+  console.error(err);
+});
+</script>
+</body>
+</html>

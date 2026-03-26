@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Model cache
+~/.cache/huggingface/
+
+# OS
+.DS_Store
+Thumbs.db
