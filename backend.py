@@ -18,7 +18,7 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 print("Loading GPT-2...")
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-model = GPT2LMHeadModel.from_pretrained("gpt2")
+model = GPT2LMHeadModel.from_pretrained("gpt2", attn_implementation="eager")
 model.eval()
 
 N_LAYERS = model.config.n_layer    # 12
